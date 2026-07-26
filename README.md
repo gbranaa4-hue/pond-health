@@ -56,6 +56,16 @@ Run the tests:
 pytest
 ```
 
+## Visualizing it with Grafana
+
+Every run logs readings and predictions to a local SQLite file
+(`pond_health.db` by default). Point Grafana's free SQLite datasource
+plugin at it for a real dashboard — temperature/pH/DO/turbidity/
+conductivity over time, color-zoned by the same thresholds the app
+alerts on, plus a table of every alert that fired. See
+[grafana/README.md](grafana/README.md) for the full setup (~10 minutes)
+and a ready-to-import [dashboard.json](grafana/dashboard.json).
+
 ## Architecture
 
 ```
@@ -76,6 +86,13 @@ diagnosis/     organic_fixes.py: maps a Prediction's (parameter,
 alerts/        console_alerter.py: prints readable warnings. Swap in
                an email/SMS/webhook sender later using the same
                notify(prediction, fixes) shape.
+
+storage/       pond_store.py: logs every reading/prediction to SQLite
+               for Grafana (or anything else) to query.
+
+grafana/       dashboard.json (generated) + generate_dashboard.py +
+               setup instructions -- see "Visualizing it with Grafana"
+               above.
 
 main.py        Wires the pipeline together and runs the simulation.
 ```
