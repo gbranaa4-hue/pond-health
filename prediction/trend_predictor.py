@@ -30,8 +30,24 @@ PARAM_LABELS = {
     "conductivity_us_cm": "Conductivity",
 }
 
-# Don't warn about a crossing more than this many hours out.
-MAX_WARNING_HORIZON_HOURS = 72.0
+# Don't warn about a crossing more than this many hours out. Several
+# parameters (temperature especially) are naturally cyclical over ~24h --
+# a straight-line extrapolation of "it's been falling for the last hour"
+# is only trustworthy a few hours ahead before that cycle curves back the
+# other way. Verified against a real 48h simulation run: at 72h this fired
+# 400+ false alarms (mostly "temperature will hit the danger threshold in
+# 17-60 hours", every single night, because it's normally cooling toward
+# its usual overnight low -- never actually gets close to dangerous). 8h
+# still gives a real developing problem (e.g. an algae bloom's turbidity
+# ramp) useful advance notice without extrapolating through a meaningful
+# fraction of the diurnal cycle.
+MAX_WARNING_HORIZON_HOURS = 8.0
+
+# Require at least this many readings before trusting a projected
+# crossing at all -- 2-3 points at the start of a run (or right after a
+# scenario begins) fit a "trend" to what's mostly noise, producing wildly
+# unstable hour estimates that swing between successive readings.
+MIN_POINTS_FOR_PROJECTION = 6
 
 
 @dataclass
@@ -69,7 +85,10 @@ class TrendPredictor:
         rng: Range = THRESHOLDS[param]
 
         status = _classify(current_value, rng)
-        crossing, hours = _project_crossing(current_value, slope_per_hr, rng)
+        if len(points) >= MIN_POINTS_FOR_PROJECTION:
+            crossing, hours = _project_crossing(current_value, slope_per_hr, rng)
+        else:
+            crossing, hours = None, None
 
         label = PARAM_LABELS[param]
         if crossing and hours is not None:
