@@ -56,6 +56,48 @@ Run the tests:
 pytest
 ```
 
+## Two anomaly detectors
+
+`main.py` runs a second, genuinely different detector alongside the
+trend predictor: a **spiking neural network**, built on the real
+[Spikeling](https://github.com/gbranaa4-hue/Spikeling) engine (the same
+DSL/runtime that drives NPC brains in `tribe` and a live Arduino sensor
+grid) rather than a one-off reimplementation. See
+`prediction/pond_brain.spk` and `prediction/spiking_predictor.py`.
+
+Each parameter drives its own LIF neuron with a "stress current" — zero
+at an ideal reading (so a single noisy blip can't trip it), and enough
+to fire only once several consecutive stressed readings integrate past
+threshold, or instantly under a genuinely critical reading. It doesn't
+forecast the future the way the trend predictor does; it answers a
+different question — *has this been a real, sustained problem, or
+noise?* — and both log to the same SQLite file (`detector` column:
+`trend` or `spiking`) so Grafana's alerts table shows whether they
+agree.
+
+**Honestly measured, not assumed** — running both against the bundled
+scenarios (`--hours 24`) surfaced a real difference, not just a
+theoretical one:
+
+| Scenario | Trend alerts | Spiking alerts | What actually happened |
+|---|---|---|---|
+| `night_oxygen_crash` | 91 (60 real stress/critical + 31 forward-looking forecasts) | 53 | Both correctly caught the real DO crash; spiking produced fewer, less-spammy alerts (fires periodically, not every single step) but with no early warning — trend flagged it up to hours ahead. |
+| `runoff_turbidity_spike` | 103 | 31 | Same pattern — spiking confirms the sustained problem, trend gets there earlier. |
+| `algae_bloom_developing` | 78 (all 78 were forecasts — turbidity peaked at 43.9, never actually reached the stress_high=50 line in this run) | 0 | Spiking stayed silent because, by design, it only reacts to a *confirmed* crossing — it doesn't get credit (or blame) for a threshold that technically never got crossed. Whether those 78 trend forecasts were "right to warn early" or "false alarms for a crossing that didn't happen" depends on your risk tolerance, and this run can't tell you which. |
+| `ammonia_buildup` | 94 | 0 | Same story as the algae case — no parameter actually crosses a real zone boundary in this scenario at 24h. |
+
+Net honest takeaway: the trend predictor trades false-alarm risk for
+early warning; the spiking detector trades early warning for only ever
+alerting on a confirmed, sustained problem. Neither is strictly better —
+run both and let the alerts table show you where they disagree.
+
+**Setup:** clone Spikeling as a sibling directory next to this
+checkout (`git clone https://github.com/gbranaa4-hue/Spikeling` in the
+same parent folder), or set `SPIKELING_CORE_PATH` to point at its
+`core/` folder. If it's not found, `main.py` prints a warning and
+carries on with the trend predictor alone — this is an optional add-on,
+not a hard dependency. Skip it explicitly with `--no-spiking`.
+
 ## Visualizing it with Grafana
 
 Every run logs readings and predictions to a local SQLite file
@@ -79,6 +121,9 @@ prediction/    thresholds.py: established aquaculture safe/stress/
                critical ranges per parameter.
                trend_predictor.py: fits a trend per parameter and
                projects forward to "hours until threshold crossed."
+               spiking_predictor.py + pond_brain.spk: the alternate
+               Spikeling-based detector -- see "Two anomaly detectors"
+               above.
 
 diagnosis/     organic_fixes.py: maps a Prediction's (parameter,
                status) to a list of concrete organic remedies.

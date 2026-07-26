@@ -48,8 +48,9 @@ SELECT timestamp * 1000 AS time, dissolved_oxygen_mg_l AS value FROM readings OR
 SELECT timestamp * 1000 AS time, turbidity_ntu AS value FROM readings ORDER BY time;
 SELECT timestamp * 1000 AS time, conductivity_us_cm AS value FROM readings ORDER BY time;
 
--- Alerts (table)
-SELECT timestamp * 1000 AS time, parameter, status, current_value,
+-- Alerts (table) -- "detector" is 'trend' or 'spiking', see main README's
+-- "Two anomaly detectors" section for what that distinction means
+SELECT timestamp * 1000 AS time, detector, parameter, status, current_value,
        hours_to_threshold, explanation
 FROM predictions WHERE alerted = 1 ORDER BY time DESC LIMIT 200;
 ```

@@ -1,0 +1,26 @@
+# Spikeling brain for pond-health's neuromorphic anomaly detector.
+#
+# One LIF neuron per water-quality parameter. spiking_predictor.py drives
+# each neuron every reading with a "stress current" derived from
+# prediction/thresholds.py's zones (ideal/stress/critical) -- 0 current
+# when ideal, so it leaks straight back to rest and never fires from
+# noise alone. A neuron only fires once enough current has integrated:
+# instantly under a critical reading, or after several consecutive
+# stressed readings accumulate past threshold (leak=8, so 8 sustained
+# ticks of drive=20 crosses threshold=100) -- a single noisy reading
+# can't trip it. Spike rate over a window is the alarm signal; see
+# spiking_predictor.py for the readout.
+
+neuron DissolvedOxygen threshold=100 leak=8  type=LIF
+neuron PH              threshold=100 leak=8  type=LIF
+neuron Temperature     threshold=100 leak=8  type=LIF
+neuron Turbidity       threshold=100 leak=8  type=LIF
+neuron Conductivity    threshold=100 leak=8  type=LIF
+
+action DissolvedOxygen -> [DO_ALARM]
+action PH              -> [PH_ALARM]
+action Temperature     -> [TEMPERATURE_ALARM]
+action Turbidity       -> [TURBIDITY_ALARM]
+action Conductivity    -> [CONDUCTIVITY_ALARM]
+
+refractory=0ms

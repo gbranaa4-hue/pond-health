@@ -123,12 +123,12 @@ def _alerts_table_panel(panel_id: int, x: int, y: int):
             "queryType": "table",
             "timeColumns": ["time"],
             "queryText": (
-                "SELECT timestamp * 1000 AS time, parameter, status, "
+                "SELECT timestamp * 1000 AS time, detector, parameter, status, "
                 "current_value, hours_to_threshold, explanation "
                 "FROM predictions WHERE alerted = 1 ORDER BY time DESC LIMIT 200"
             ),
             "rawQueryText": (
-                "SELECT timestamp * 1000 AS time, parameter, status, "
+                "SELECT timestamp * 1000 AS time, detector, parameter, status, "
                 "current_value, hours_to_threshold, explanation "
                 "FROM predictions WHERE alerted = 1 ORDER BY time DESC LIMIT 200"
             ),

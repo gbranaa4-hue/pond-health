@@ -13,11 +13,13 @@ Usage:
     python main.py --scenario algae_bloom_developing --hours 72
 """
 import argparse
+import dataclasses
 import time
 from typing import Optional
 
 from sensors.simulated_reader import SimulatedPondReader, Scenario
 from prediction.trend_predictor import TrendPredictor
+from prediction.spiking_predictor import SpikingAnomalyDetector, SpikelingNotFound
 from diagnosis.organic_fixes import recommend
 from alerts.console_alerter import ConsoleAlerter
 from storage.pond_store import PondHistoryStore
@@ -32,11 +34,18 @@ SCENARIOS = {
 
 def run(hours: float, step_minutes: float, scenario: str = None,
         scenario_start_hour: float = 6.0, scenario_duration_hours: float = 12.0,
-        db_path: Optional[str] = "pond_health.db") -> None:
+        db_path: Optional[str] = "pond_health.db", use_spiking: bool = True) -> None:
     reader = SimulatedPondReader(start_time=0.0)
     predictor = TrendPredictor()
     alerter = ConsoleAlerter()
     store = PondHistoryStore(db_path) if db_path else None
+
+    spiking = None
+    if use_spiking:
+        try:
+            spiking = SpikingAnomalyDetector()
+        except SpikelingNotFound as e:
+            print(f"[pond-health] Spiking detector unavailable, continuing with trend-only: {e}")
 
     if scenario:
         reader.start_scenario(
@@ -62,6 +71,8 @@ def run(hours: float, step_minutes: float, scenario: str = None,
         sim_t = i * step_s
         reading = reader.read(at_time=sim_t)
         predictor.ingest(reading)
+        if spiking:
+            spiking.ingest(reading)
         real_t = wall_now - (total_duration_s - sim_t)
 
         if store:
@@ -83,7 +94,16 @@ def run(hours: float, step_minutes: float, scenario: str = None,
             if should_alert:
                 alerter.notify(pred, recommend(pred))
             if store:
-                store.log_prediction(real_t, pred, should_alert)
+                store.log_prediction(real_t, pred, should_alert, detector="trend")
+
+        if spiking:
+            for pred in spiking.predict_all():
+                should_alert = pred.status != "ideal"
+                if should_alert:
+                    alerter.notify(dataclasses.replace(pred, explanation=f"[spiking] {pred.explanation}"),
+                                   recommend(pred))
+                if store:
+                    store.log_prediction(real_t, pred, should_alert, detector="spiking")
 
     if store:
         store.close()
@@ -99,8 +119,11 @@ if __name__ == "__main__":
     parser.add_argument("--db-path", type=str, default="pond_health.db",
                          help="SQLite file to log readings/predictions to, for Grafana (see grafana/README.md)")
     parser.add_argument("--no-db", action="store_true", help="Skip SQLite logging entirely")
+    parser.add_argument("--no-spiking", action="store_true",
+                         help="Skip the Spikeling-based anomaly detector (trend predictor only)")
     args = parser.parse_args()
 
     run(args.hours, args.step_minutes, args.scenario,
         args.scenario_start_hour, args.scenario_duration_hours,
-        db_path=None if args.no_db else args.db_path)
+        db_path=None if args.no_db else args.db_path,
+        use_spiking=not args.no_spiking)

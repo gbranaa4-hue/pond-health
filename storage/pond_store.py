@@ -31,7 +31,8 @@ CREATE TABLE IF NOT EXISTS predictions (
     crossing_threshold TEXT,
     hours_to_threshold REAL,
     explanation TEXT NOT NULL,
-    alerted INTEGER NOT NULL DEFAULT 0
+    alerted INTEGER NOT NULL DEFAULT 0,
+    detector TEXT NOT NULL DEFAULT 'trend'
 );
 CREATE INDEX IF NOT EXISTS idx_predictions_timestamp ON predictions(timestamp);
 """
@@ -61,11 +62,12 @@ class PondHistoryStore:
         )
         self._conn.commit()
 
-    def log_prediction(self, timestamp: float, pred: Prediction, alerted: bool) -> None:
+    def log_prediction(self, timestamp: float, pred: Prediction, alerted: bool,
+                        detector: str = "trend") -> None:
         self._conn.execute(
             "INSERT INTO predictions (timestamp, parameter, current_value, "
             "trend_per_hour, status, crossing_threshold, hours_to_threshold, "
-            "explanation, alerted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "explanation, alerted, detector) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 timestamp,
                 pred.parameter,
@@ -76,6 +78,7 @@ class PondHistoryStore:
                 pred.hours_to_threshold,
                 pred.explanation,
                 int(alerted),
+                detector,
             ),
         )
         self._conn.commit()

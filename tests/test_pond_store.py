@@ -40,6 +40,26 @@ def test_log_prediction_persists_alert_flag(tmp_path):
     assert row == ("dissolved_oxygen_mg_l", "ideal", 1)
 
 
+def test_log_prediction_defaults_detector_to_trend(tmp_path):
+    store = PondHistoryStore(str(tmp_path / "test.db"))
+    store.log_prediction(1_700_000_000.0, _prediction(), alerted=False)
+    store.close()
+
+    conn = sqlite3.connect(str(tmp_path / "test.db"))
+    row = conn.execute("SELECT detector FROM predictions").fetchone()
+    assert row == ("trend",)
+
+
+def test_log_prediction_records_spiking_detector(tmp_path):
+    store = PondHistoryStore(str(tmp_path / "test.db"))
+    store.log_prediction(1_700_000_000.0, _prediction(), alerted=True, detector="spiking")
+    store.close()
+
+    conn = sqlite3.connect(str(tmp_path / "test.db"))
+    row = conn.execute("SELECT detector FROM predictions").fetchone()
+    assert row == ("spiking",)
+
+
 def test_reopening_same_db_path_does_not_wipe_existing_rows(tmp_path):
     db_path = str(tmp_path / "test.db")
     store = PondHistoryStore(db_path)
